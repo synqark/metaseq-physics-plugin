@@ -1,0 +1,45 @@
+name: windows-ci
+
+on:
+  push:
+    branches: [ "main", "copilot/**" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: MSVC compile check (mock SDK)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: >
+          cmake -S . -B build -A x64
+          -DMQ_USE_MOCK_SDK=ON
+          -DMQ_USE_BULLET=OFF
+          -DMQ_BUILD_TESTS=ON
+
+      - name: Build plugin
+        run: cmake --build build --config Release --parallel
+
+      - name: Run unit tests
+        run: ctest --test-dir build --output-on-failure -C Release
+
+  lint:
+    name: Source hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject SDK redistribution
+        run: |
+          if find sdk -type f \( -name '*.h' -o -name '*.cpp' \) | grep -q .; then
+            echo "::error::Files under sdk/ must NOT be committed (Metasequoia SDK is not redistributable)."
+            exit 1
+          fi
